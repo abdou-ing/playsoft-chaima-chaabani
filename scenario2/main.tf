@@ -1,6 +1,3 @@
-# ===================================================================
-# SCENARIO 2: Bastion (NAT + Nginx reverse proxy) + JumpServer privé
-# ===================================================================
 
 # Récupère le réseau privé existant
 data "hcloud_network" "private_network" {
@@ -12,9 +9,15 @@ data "hcloud_ssh_key" "chaima_key" {
   name = var.ssh_key_name
 }
 
-# ===================================================================
+# Crée un subnet cloud dans le réseau (si pas déjà existant)
+resource "hcloud_network_subnet" "cloud_subnet" {
+  network_id   = data.hcloud_network.private_network.id
+  type         = "cloud"
+  network_zone = "eu-central"
+  ip_range     = "10.40.0.16/28"  # Range: 10.40.0.16 - 10.40.0.31
+}
 # FIREWALL POUR LE BASTION (serveur public)
-# ===================================================================
+
 resource "hcloud_firewall" "bastion_firewall" {
   name = "firewall-bastion-chaima"
 
@@ -70,9 +73,8 @@ resource "hcloud_firewall" "bastion_firewall" {
   }
 }
 
-# ===================================================================
 # FIREWALL POUR LE JUMPSERVER PRIVÉ (pas d'IP publique)
-# ===================================================================
+
 resource "hcloud_firewall" "jumpserver_private_firewall" {
   name = "firewall-jumpserver-private-chaima"
 
@@ -113,9 +115,8 @@ resource "hcloud_firewall" "jumpserver_private_firewall" {
   }
 }
 
-# ===================================================================
+
 # SERVEUR BASTION (NAT + Reverse Proxy Nginx) - PUBLIC
-# ===================================================================
 resource "hcloud_server" "bastion" {
   name        = "bastion-nat-nginx-chaima"
   server_type = var.bastion_server_type
@@ -123,6 +124,8 @@ resource "hcloud_server" "bastion" {
   image       = var.server_image
   ssh_keys    = [data.hcloud_ssh_key.chaima_key.id]
   firewall_ids = [hcloud_firewall.bastion_firewall.id]
+
+  depends_on = [hcloud_network_subnet.cloud_subnet]
 
   # IP privée dans le réseau existant
   network {
@@ -193,9 +196,9 @@ resource "hcloud_server" "bastion" {
   EOF
 }
 
-# ===================================================================
+
 # SERVEUR JUMPSERVER PRIVÉ (pas d'IP publique)
-# ===================================================================
+
 resource "hcloud_server" "jumpserver_private" {
   name        = "jumpserver-private-chaima"
   server_type = var.jumpserver_server_type
@@ -203,6 +206,8 @@ resource "hcloud_server" "jumpserver_private" {
   image       = var.server_image
   ssh_keys    = [data.hcloud_ssh_key.chaima_key.id]
   firewall_ids = [hcloud_firewall.jumpserver_private_firewall.id]
+
+  depends_on = [hcloud_network_subnet.cloud_subnet]
 
   # IP privée uniquement (pas d'IP publique)
   network {
@@ -222,20 +227,28 @@ resource "hcloud_server" "jumpserver_private" {
     package_upgrade: true
 
     write_files:
-      # Configuration de la route par défaut vers le bastion (NAT)
+      # Configuration réseau statique + DNS + route par défaut vers le bastion (NAT)
       - path: /etc/netplan/60-private-route.yaml
+        permissions: "0600"
         content: |
           network:
             version: 2
             ethernets:
               ens10:
+                dhcp4: no
+                addresses: [${var.jumpserver_private_ip}/28]
                 routes:
                   - to: 0.0.0.0/0
                     via: ${var.bastion_private_ip}
+                nameservers:
+                  addresses: [1.1.1.1, 8.8.8.8]
 
     runcmd:
       # Appliquer la configuration réseau
       - netplan apply
+
+      # Mettre à jour les paquets (nécessaire pour résoudre les DNS)
+      - apt-get update
 
       # Installer Docker et Docker Compose
       - apt-get install -y docker.io docker-compose ca-certificates curl wget
