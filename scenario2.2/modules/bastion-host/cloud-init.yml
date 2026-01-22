@@ -1,0 +1,18 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - iptables-persistent
+
+runcmd:
+  - |
+    cat <<'EOF' >> /etc/networkd-dispatcher/routable.d/10-eth0-post-up
+    #!/bin/bash
+    
+    echo 1 > /proc/sys/net/ipv4/ip_forward
+    #iptables -t nat -A POSTROUTING -s '10.0.0.0/16' -o eth0 -j MASQUERADE
+    iptables -t nat -A POSTROUTING -s '${network_range}' -o eth0 -j MASQUERADE
+    EOF
+    chmod +x /etc/networkd-dispatcher/routable.d/10-eth0-post-up
+  - reboot
