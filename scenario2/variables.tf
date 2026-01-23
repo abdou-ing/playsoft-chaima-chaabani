@@ -8,7 +8,7 @@ variable "network_name" {
 }
 
 variable "ssh_key_name" {
-  default = "hzn_shen"
+  default = "chaima_pubkey"
 }
 
 variable "location" {
@@ -34,3 +34,6 @@ variable "bastion_ip" {
 variable "jump_ip" {
   default = "10.40.0.21"
 }
+
+
+

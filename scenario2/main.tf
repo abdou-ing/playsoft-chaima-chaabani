@@ -1,6 +1,5 @@
-########################
+
 # DATA
-########################
 data "hcloud_network" "net" {
   name = var.network_name
 }
@@ -18,9 +17,7 @@ resource "hcloud_network_subnet" "subnet" {
   ip_range     = "10.40.0.16/28"
 }
 
-########################
 # FIREWALLS
-########################
 resource "hcloud_firewall" "bastion_fw" {
   name = "fw-bastion"
 
@@ -63,7 +60,7 @@ resource "hcloud_firewall" "jump_fw" {
   rule {
     direction  = "in"
     protocol   = "tcp"
-    port       = "8080"
+    port       = "80"
     source_ips = ["10.40.0.0/24"]
   }
 
@@ -96,32 +93,34 @@ resource "hcloud_server" "bastion" {
     ipv6_enabled = false
   }
 
-  user_data = <<EOF
+ user_data = <<EOF
 #cloud-config
-package_update: true
-packages:
-  - nginx
-  - iptables-persistent
 
-#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - iptables-persistent
+  - nginx
+
 write_files:
-  - path: /etc/networkd-dispatcher/routable.d/10-eth0-post-up
+  - path: /usr/local/bin/nat.sh
+    permissions: '0755'
     content: |
       #!/bin/bash
-      
       echo 1 > /proc/sys/net/ipv4/ip_forward
-      iptables -t nat -A POSTROUTING -s '10.40.0.0/24' -o eth0 -j MASQUERADE
-    permissions: '0755'
 
-runcmd:
-  - reboot
-write_files:
+      iptables -t nat -C POSTROUTING -s 10.40.0.0/24 -o eth0 -j MASQUERADE 2>/dev/null || \
+      iptables -t nat -A POSTROUTING -s 10.40.0.0/24 -o eth0 -j MASQUERADE
+
+      netfilter-persistent save
+
   - path: /etc/nginx/sites-available/jumpserver
     content: |
       server {
         listen 80;
         location / {
-          proxy_pass http://10.40.0.21:8080;
+          proxy_pass http://10.40.0.21:80;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -129,12 +128,14 @@ write_files:
       }
 
 runcmd:
-  - sysctl --system
+  - echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+  - sysctl -p
+  - /usr/local/bin/nat.sh
   - ln -sf /etc/nginx/sites-available/jumpserver /etc/nginx/sites-enabled/jumpserver
   - rm -f /etc/nginx/sites-enabled/default
   - nginx -t
   - systemctl restart nginx
-  - /usr/local/bin/nat.sh
+  - reboot
 EOF
 }
 
@@ -159,40 +160,55 @@ resource "hcloud_server" "jumpserver" {
     ipv6_enabled = false
   }
 
-  user_data = <<EOF
+ user_data = <<EOF
 #cloud-config
 package_update: true
-  packages:
-    - docker.io
-    - curl
+package_upgrade: true
+
+packages:
+  - docker.io
+  - curl
+  - git
+  - python3-pip
+  - libffi-dev
+  - libssl-dev
+  
+
 write_files:
   - path: /etc/systemd/network/10-enp7s0.network
     content: |
-      # Custom network configuration added by cloud-init
       [Match]
       Name=enp7s0
 
       [Network]
       DHCP=yes
       Gateway=10.40.0.1
-    append: true
 
   - path: /etc/systemd/resolved.conf
     content: |
       [Resolve]
       DNS=185.12.64.2 185.12.64.1
       FallbackDNS=8.8.8.8
-    append: true
-
 
 runcmd:
+  # Redémarrer le réseau pour appliquer la gateway
+  - systemctl restart systemd-networkd
+  - systemctl restart systemd-resolved
+  - sleep 5
+
+  # Docker
   - systemctl enable docker
   - systemctl start docker
-    - sleep 10
-  - cd /opt
-    - nohup bash -c 'curl -sSL https://github.com/jumpserver/jumpserver/releases/latest/download/quick_start.sh | bash' > /var/log/jumpserver-install.log 2>&1 &
-runcmd:
-  - apt remove -y hc-utils
+  - sleep 10
+
+  # Installation JumpServer (mode rapide officiel)
+  - curl -sSL https://github.com/jumpserver/jumpserver/releases/latest/download/quick_start.sh -o /tmp/jumpserver.sh
+  - chmod +x /tmp/jumpserver.sh
+  - bash /tmp/jumpserver.sh > /var/log/jumpserver-install.log 2>&1
+
+  # Nettoyage
+  - apt remove -y hc-utils || true
+
   - reboot
 EOF
 }

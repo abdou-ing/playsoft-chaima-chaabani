@@ -8,7 +8,7 @@ data "hcloud_ssh_key" "chaima_key" {
   name = "chaima_pubkey"
 }
 
-# Firewall minimal : SSH + HTTP (ajoute HTTPS si tu veux)
+# Firewall minimal : SSH + HTTP 
 resource "hcloud_firewall" "jumpserver_firewall" {
   name = "firewall-jumpserver-chaima"
 
@@ -35,8 +35,6 @@ resource "hcloud_firewall" "jumpserver_firewall" {
     source_ips  = ["0.0.0.0/0", "::/0"]
     description = "Allow HTTPS"
   }
-
-  
 }
 
 # Serveur JumpServer

@@ -1,18 +1,44 @@
+
 #cloud-config
+
 package_update: true
 package_upgrade: true
-
 packages:
   - iptables-persistent
+  - nginx
+
+write_files:
+  - path: /usr/local/bin/nat.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      echo 1 > /proc/sys/net/ipv4/ip_forward
+
+      iptables -t nat -C POSTROUTING -s 10.40.0.0/24 -o eth0 -j MASQUERADE 2>/dev/null || \
+      iptables -t nat -A POSTROUTING -s 10.40.0.0/24 -o eth0 -j MASQUERADE
+
+      netfilter-persistent save
+
+  - path: /etc/nginx/sites-available/jumpserver
+    content: |
+      server {
+        listen 80;
+        location / {
+          proxy_pass http://10.40.0.21:80;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+      }
 
 runcmd:
-  - |
-    cat <<'EOF' >> /etc/networkd-dispatcher/routable.d/10-eth0-post-up
-    #!/bin/bash
-    
-    echo 1 > /proc/sys/net/ipv4/ip_forward
-    #iptables -t nat -A POSTROUTING -s '10.0.0.0/16' -o eth0 -j MASQUERADE
-    iptables -t nat -A POSTROUTING -s '${network_range}' -o eth0 -j MASQUERADE
-    EOF
-    chmod +x /etc/networkd-dispatcher/routable.d/10-eth0-post-up
+  - echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+  - sysctl -p
+  - /usr/local/bin/nat.sh
+  - ln -sf /etc/nginx/sites-available/jumpserver /etc/nginx/sites-enabled/jumpserver
+  - rm -f /etc/nginx/sites-enabled/default
+  - nginx -t
+  - systemctl restart nginx
   - reboot
+
+
