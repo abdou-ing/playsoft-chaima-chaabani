@@ -1,0 +1,89 @@
+---
+- name: Créer un utilisateur dans JumpServer avec session
+  hosts: jumpserver
+  gather_facts: no
+
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Se connecter à JumpServer et obtenir le cookie de session
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/authentication/auth/"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ jumpserver_admin_user }}"
+          password: "{{ jumpserver_admin_password }}"
+        status_code: [200, 201]
+        return_content: yes
+      register: login_response
+      no_log: true
+
+    - name: Extraire le cookie de session
+      set_fact:
+        session_cookie: "{{ login_response.cookies_string }}"
+        auth_token: "{{ login_response.json.token }}"
+
+    - name: Vérifier si l'utilisateur existe déjà
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/users/users/?username={{ devops_user.username | urlencode }}"
+        method: GET
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+        return_content: yes
+      register: check_user
+
+    - name: Créer l'utilisateur DevOps avec la session
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/users/users/"
+        method: POST
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+          X-JMS-ORG: "00000000-0000-0000-0000-000000000002"
+        body_format: json
+        body:
+          username: "{{ devops_user.username }}"
+          name: "{{ devops_user.name }}"
+          email: "{{ devops_user.email }}"
+          password: "{{ devops_user.password }}"
+          is_active: true
+        status_code: [200, 201]
+        return_content: yes
+      register: create_user
+      when: check_user.json | length == 0
+      no_log: true
+
+    - name: Récupérer l'utilisateur créé ou existant
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/users/users/?username={{ devops_user.username | urlencode }}"
+        method: GET
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+        return_content: yes
+      register: user_info
+
+    - name: Mettre à jour l'utilisateur avec le rôle System Admin
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/users/users/{{ user_info.json[0].id }}/"
+        method: PATCH
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          system_roles:
+            - "00000000-0000-0000-0000-000000000001"
+        status_code: [200, 201]
+        return_content: yes
+      register: update_user
+
+    - name: Afficher le résultat final
+      debug:
+        msg: "Utilisateur '{{ devops_user.username }}' configuré avec le rôle System Admin - Email: {{ devops_user.email }}"
+

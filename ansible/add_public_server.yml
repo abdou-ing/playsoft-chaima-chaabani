@@ -1,0 +1,131 @@
+- name: Ajouter un serveur public dans JumpServer avec clé SSH
+  hosts: jumpserver
+  gather_facts: no
+
+  vars_files:
+    - vars.yml
+
+  vars:
+    server_asset:
+      name: "public-server-chaima"
+      ip: "188.245.112.46"
+      internal_ip: "10.40.0.2"
+      account_username: "root"
+      ssh_private_key_path: "/home/chaima/.ssh/chaima_key"
+     
+
+  tasks:
+
+    - name: Se connecter à JumpServer et obtenir le token et cookie
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/authentication/auth/"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ jumpserver_admin_user }}"
+          password: "{{ jumpserver_admin_password }}"
+        status_code: [200, 201]
+        return_content: yes
+      register: login_response
+      no_log: true
+
+    - name: Extraire le cookie et le token
+      set_fact:
+        session_cookie: "{{ login_response.cookies_string }}"
+        auth_token: "{{ login_response.json.token }}"
+
+    - name: Vérifier si l'asset existe déjà
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/assets/hosts/?name={{ server_asset.name | urlencode }}"
+        method: GET
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+        return_content: yes
+      register: check_asset
+
+    - name: Récupérer les plateformes disponibles
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/assets/platforms/"
+        method: GET
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+        return_content: yes
+      register: platforms
+
+    - name: Extraire l'ID de la plateforme Linux
+      set_fact:
+        linux_platform_id: >-
+          {{
+            platforms.json
+            | selectattr('name', 'search', 'Linux|linux|LINUX')
+            | map(attribute='id')
+            | first
+          }}
+
+    - name: Ajouter le serveur public dans JumpServer si inexistant
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/assets/hosts/"
+        method: POST
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+          X-JMS-ORG: "00000000-0000-0000-0000-000000000002"
+        body_format: json
+        body:
+          name: "{{ server_asset.name }}"
+          address: "{{ server_asset.ip }}"
+          platform: "{{ linux_platform_id }}"
+        status_code: [200, 201]
+        return_content: yes
+      register: create_asset
+      when: check_asset.json | length == 0 and linux_platform_id is defined
+
+    - name: Déterminer l'ID de l'asset pour créer le compte
+      set_fact:
+        asset_id: "{{ create_asset.json.id if create_asset.json is defined else check_asset.json[0].id }}"
+
+    - name: Lire la cle privee SSH
+      slurp:
+        src: "{{ server_asset.ssh_private_key_path }}"
+      register: ssh_key_file
+      delegate_to: localhost
+
+    - name: Vérifier si le compte SSH existe déjà
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/accounts/accounts/?username={{ server_asset.account_username | urlencode }}&asset={{ asset_id }}"
+        method: GET
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+        return_content: yes
+      register: check_account
+
+    - name: Créer ou mettre à jour le compte SSH pour le serveur
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/accounts/accounts/"
+        method: POST
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ server_asset.account_username }}"
+          username: "{{ server_asset.account_username }}"
+          secret_type: "ssh_key"
+          secret: "{{ ssh_key_file.content | b64decode }}"
+          asset: "{{ asset_id }}"
+          privileged: true
+        status_code: [200, 201]
+        return_content: yes
+      register: create_account
+      when: check_account.json | length == 0
+      no_log: true
+
+    - name: Afficher le résultat final
+      debug:
+        msg: >
+          Serveur '{{ server_asset.name }}' avec compte SSH '{{ server_asset.account_username }}' est prêt.

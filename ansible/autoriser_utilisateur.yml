@@ -1,0 +1,150 @@
+---
+- name: Autoriser un utilisateur aux assets
+  hosts: jumpserver
+  gather_facts: no
+
+  vars_files:
+    - vars.yml
+
+  vars:
+    target_username: "chaima-chaabeni"
+    assets_names:
+      - "private-server-chaima"
+
+  tasks:
+
+    - name: Se connecter a JumpServer et obtenir le token
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/authentication/auth/"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ jumpserver_admin_user }}"
+          password: "{{ jumpserver_admin_password }}"
+        status_code: [200, 201]
+        return_content: yes
+      register: login_response
+      no_log: true
+
+    - name: Extraire le cookie et le token
+      set_fact:
+        session_cookie: "{{ login_response.cookies_string }}"
+        auth_token: "{{ login_response.json.token }}"
+
+    - name: Recuperer l'ID de l'utilisateur
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/users/users/?username={{ target_username | urlencode }}"
+        method: GET
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+        return_content: yes
+      register: user_result
+
+    - name: Extraire l'ID de l'utilisateur
+      set_fact:
+        user_id: "{{ user_result.json[0].id }}"
+      when: user_result.json | length > 0
+
+    - name: Afficher les utilisateurs trouves
+      debug:
+        msg: "Utilisateur trouve : {{ user_result.json }}"
+      when: user_result.json | length > 0
+
+    - name: Lister tous les utilisateurs si non trouve
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/users/users/"
+        method: GET
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+        return_content: yes
+      register: all_users_result
+      when: user_result.json | length == 0
+
+    - name: Afficher les utilisateurs disponibles
+      debug:
+        msg: "Utilisateurs disponibles : {{ all_users_result.json | map(attribute='username') | list }}"
+      when: all_users_result is defined and all_users_result.json is defined
+
+    - name: Recuperer les assets
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/assets/hosts/?name={{ item | urlencode }}"
+        method: GET
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+        return_content: yes
+      register: assets_result
+      loop: "{{ assets_names }}"
+
+    - name: Lister les assets trouves
+      debug:
+        msg: "Asset {{ item.item }} : {{ item.json | length }} trouve(s)"
+      loop: "{{ assets_result.results }}"
+
+    - name: Extraire les IDs des assets trouves
+      set_fact:
+        assets_to_authorize: "{{ assets_to_authorize | default([]) + [{'name': item.json[0].name, 'id': item.json[0].id}] }}"
+      loop: "{{ assets_result.results }}"
+      when: item.json | length > 0
+
+    - name: Afficher les assets a autoriser
+      debug:
+        msg: "Assets trouves : {{ assets_to_authorize }}"
+      when: assets_to_authorize is defined
+
+    - name: Recuperer les comptes de chaque asset
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/accounts/accounts/?asset={{ item.id }}"
+        method: GET
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+        return_content: yes
+      register: accounts_result
+      loop: "{{ assets_to_authorize }}"
+      when: assets_to_authorize is defined
+
+    - name: Construire la liste des comptes par asset
+      set_fact:
+        accounts_by_asset: "{{ accounts_by_asset | default({}) | combine({ item.item.id: (item.json | map(attribute='id') | list) }) }}"
+      loop: "{{ accounts_result.results }}"
+      when: accounts_result is defined
+
+    - name: Creer les permissions pour chaque asset
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/perms/asset-permissions/"
+        method: POST
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+          X-JMS-ORG: "00000000-0000-0000-0000-000000000002"
+        body_format: json
+        body:
+          name: "authorization1"
+          users:
+            - "{{ user_id }}"
+          assets:
+            - "{{ item.id }}"
+          accounts: "{{ accounts_by_asset[item.id] | default([]) }}"
+          actions:
+            - "connect"
+        status_code: [200, 201]
+        return_content: yes
+      register: permission_result
+      loop: "{{ assets_to_authorize }}"
+      when: assets_to_authorize is defined and user_id is defined
+      no_log: false
+
+    - name: Afficher le resultat des permissions
+      debug:
+        msg: "Resultat creation permission: {{ permission_result.results | map(attribute='json') | list }}"
+      when: permission_result is defined
+
+    - name: Afficher le resultat de l'autorisation
+      debug:
+        msg: >
+           Utilisateur '{{ target_username }}' autorise aux assets
+

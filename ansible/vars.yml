@@ -1,0 +1,16 @@
+---
+jumpserver_url: "http://168.119.240.125"
+jumpserver_admin_user: "admin"
+jumpserver_admin_password: "Chaima@@2001"
+
+admin_user:
+  name: "admin-user"
+  username: "aymen-tangara"
+  email: "aymen@example.com"
+  password: "Root123!"
+
+devops_user:
+  name: "devops-user"
+  username: "chaima-chaabeni"
+  email: "chaima@example.com"
+  password: "chaima123!"

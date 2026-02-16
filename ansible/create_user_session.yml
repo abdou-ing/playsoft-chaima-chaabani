@@ -1,0 +1,69 @@
+---
+- name: Créer un utilisateur dans JumpServer avec session
+  hosts: jumpserver
+  gather_facts: no
+
+  vars_files:
+    - vars.yml
+
+  tasks:
+
+    - name: Se connecter à JumpServer et obtenir le cookie de session
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/authentication/auth/"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ jumpserver_admin_user }}"
+          password: "{{ jumpserver_admin_password }}"
+        status_code: [200, 201]
+        return_content: yes
+      register: login_response
+      no_log: true
+
+    - name: Extraire le cookie et le token
+      set_fact:
+        session_cookie: "{{ login_response.cookies_string }}"
+        auth_token: "{{ login_response.json.token }}"
+
+    - name: Vérifier si l'utilisateur existe déjà
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/users/users/?username={{ devops_user.username | urlencode }}"
+        method: GET
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+        return_content: yes
+      register: check_user
+
+    - name: Créer l'utilisateur DevOps
+      uri:
+        url: "{{ jumpserver_url }}/api/v1/users/users/"
+        method: POST
+        headers:
+          Cookie: "{{ session_cookie }}"
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+          X-JMS-ORG: "00000000-0000-0000-0000-000000000002"
+        body_format: json
+        body:
+          username: "{{ devops_user.username }}"
+          name: "{{ devops_user.name }}"
+          email: "{{ devops_user.email }}"
+          password: "{{ devops_user.password }}"
+          is_active: true
+        status_code: [200, 201]
+        return_content: yes
+      register: create_user
+      when: check_user.json | length == 0
+      no_log: true
+
+    - name: Message succès
+      debug:
+        msg: "Utilisateur créé avec succès"
+      when: check_user.json | length == 0
+
+    - name: Message si existe déjà
+      debug:
+        msg: "L'utilisateur existe déjà"
+      when: check_user.json | length > 0
