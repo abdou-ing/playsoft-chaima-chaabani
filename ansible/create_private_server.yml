@@ -1,17 +1,13 @@
-- name: Ajouter un serveur public dans JumpServer avec clé SSH
-  hosts: jumpserver
+- name: Ajouter un serveur privé dans JumpServer avec clé SSH
+  hosts: localhost
+  connection: local
   gather_facts: no
 
   vars_files:
     - vars.yml
 
   vars:
-    server_asset:
-      name: "private-server-chaima"
-      ip: "10.40.0.5"
-      account_username: "root"
-      ssh_private_key_path: "/home/chaima/.ssh/chaima_key"
-     
+    server_asset: "{{ private_server }}"
 
   tasks:
 
@@ -125,7 +121,33 @@
       when: check_account.json | length == 0
       no_log: true
 
+    - name: Tester la connexion SSH avec la clé (via ProxyJump pour serveur privé)
+      shell: |
+        ssh -i {{ server_asset.ssh_private_key_path }} \
+        -o StrictHostKeyChecking=no \
+        -o BatchMode=yes \
+        -o ProxyCommand="ssh -i {{ server_asset.ssh_private_key_path }} -o StrictHostKeyChecking=no -W %h:%p root@{{ public_server.ip }}" \
+        {{ server_asset.account_username }}@{{ server_asset.ip }} \
+        "echo 'Test connexion OK'"
+      register: ssh_test
+      ignore_errors: yes
+
+    - name: Afficher le statut de l'authentification
+      debug:
+        msg: |
+          {% if ssh_test.rc == 0 %}
+          ✓ Authentification SSH configurée avec succès (via ProxyJump)
+          {% else %}
+          ✗ Authentification SSH échouée - Le serveur privé nécessite une configuration via le serveur public
+          Pour configurer manuellement:
+            1. Copiez d'abord la clé vers le serveur public si nécessaire
+            2. Depuis le serveur public ({{ public_server.ip }}), exécutez:
+               ssh-copy-id -i {{ server_asset.ssh_private_key_path }}.pub {{ server_asset.account_username }}@{{ server_asset.ip }}
+          Pour tester la connexion:
+            ssh -o ProxyCommand="ssh -W %h:%p root@{{ public_server.ip }}" {{ server_asset.account_username }}@{{ server_asset.ip }}
+          {% endif %}
+
     - name: Afficher le résultat final
       debug:
         msg: >
-          Serveur '{{ server_asset.name }}' avec compte SSH '{{ server_asset.account_username }}' est prêt.
+          Serveur '{{ server_asset.name }}' avec compte SSH '{{ server_asset.account_username }}' est prêt dans JumpServer.

@@ -1,6 +1,6 @@
 ---
 - name: Créer un utilisateur dans JumpServer avec session
-  hosts: jumpserver
+  hosts: localhost
   gather_facts: no
 
   vars_files:
@@ -19,6 +19,7 @@
         status_code: [200, 201]
         return_content: yes
       register: login_response
+      delegate_to: localhost
       no_log: true
 
     - name: Extraire le cookie et le token
@@ -35,6 +36,7 @@
           Authorization: "Bearer {{ auth_token }}"
         return_content: yes
       register: check_user
+      delegate_to: localhost
 
     - name: Créer l'utilisateur DevOps
       uri:
@@ -55,6 +57,7 @@
         status_code: [200, 201]
         return_content: yes
       register: create_user
+      delegate_to: localhost
       when: check_user.json | length == 0
       no_log: true
 

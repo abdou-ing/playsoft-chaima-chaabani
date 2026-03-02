@@ -1,0 +1,11 @@
+.env
+.vscode/
+.vscode-server/
+__pycache__/
+*.pyc
+COMMANDES_TEST.md
+GUIDE_TEST_SCRIPT.md
+requirements.txt
+setup-env.sh.vscode-server/
+snap/
+.terraform/

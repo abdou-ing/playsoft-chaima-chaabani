@@ -1,16 +1,37 @@
 ---
-jumpserver_url: "http://168.119.240.125"
-jumpserver_admin_user: "admin"
-jumpserver_admin_password: "Chaima@@2001"
+jumpserver_url: "http://ip"
+jumpserver_admin_user: "user-name"
+jumpserver_admin_password: "password"
 
 admin_user:
   name: "admin-user"
   username: "aymen-tangara"
   email: "aymen@example.com"
-  password: "Root123!"
+  password: "password"
 
 devops_user:
   name: "devops-user"
   username: "chaima-chaabeni"
   email: "chaima@example.com"
-  password: "chaima123!"
+  password: "password"
+
+# Configuration serveur public
+public_server:
+  name: "name"
+  ip: "ip-public"
+  internal_ip: "ip-privat"
+  account_username: "name"
+  ssh_private_key_path: "sshkey"
+
+# Configuration serveur privé
+private_server:
+  name: "private-server-chaima"
+  ip: "ip-privat"
+  account_username: "name"
+  ssh_private_key_path: "sshkey"
+
+# Configuration d'autorisation utilisateur
+user_authorization:
+  target_username: "chaima-chaabeni"
+  assets_names:
+    - "private-server-chaima"

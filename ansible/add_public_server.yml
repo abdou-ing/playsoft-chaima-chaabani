@@ -1,18 +1,13 @@
 - name: Ajouter un serveur public dans JumpServer avec clé SSH
-  hosts: jumpserver
+  hosts: localhost
+  connection: local
   gather_facts: no
 
   vars_files:
     - vars.yml
 
   vars:
-    server_asset:
-      name: "public-server-chaima"
-      ip: "188.245.112.46"
-      internal_ip: "10.40.0.2"
-      account_username: "root"
-      ssh_private_key_path: "/home/chaima/.ssh/chaima_key"
-     
+    server_asset: "{{ public_server }}"
 
   tasks:
 
@@ -125,7 +120,27 @@
       when: check_account.json | length == 0
       no_log: true
 
+    - name: Tester la connexion SSH avec la clé
+      shell: |
+        ssh -i {{ server_asset.ssh_private_key_path }} \
+        -o StrictHostKeyChecking=no \
+        -o BatchMode=yes \
+        {{ server_asset.account_username }}@{{ server_asset.ip }} \
+        "echo 'Test connexion OK'"
+      register: ssh_test
+      ignore_errors: yes
+
+    - name: Afficher le statut de l'authentification
+      debug:
+        msg: |
+          {% if ssh_test.rc == 0 %}
+          ✓ Authentification SSH configurée avec succès
+          {% else %}
+          ✗ Authentification SSH échouée - Configurez manuellement avec:
+            ssh-copy-id -i {{ server_asset.ssh_private_key_path }}.pub {{ server_asset.account_username }}@{{ server_asset.ip }}
+          {% endif %}
+
     - name: Afficher le résultat final
       debug:
         msg: >
-          Serveur '{{ server_asset.name }}' avec compte SSH '{{ server_asset.account_username }}' est prêt.
+          Serveur '{{ server_asset.name }}' avec compte SSH '{{ server_asset.account_username }}' est prêt dans JumpServer.

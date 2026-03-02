@@ -1,15 +1,15 @@
 ---
 - name: Autoriser un utilisateur aux assets
-  hosts: jumpserver
+  hosts: localhost
+  connection: local
   gather_facts: no
 
   vars_files:
     - vars.yml
 
   vars:
-    target_username: "chaima-chaabeni"
-    assets_names:
-      - "private-server-chaima"
+    target_username: "{{ user_authorization.target_username }}"
+    assets_names: "{{ user_authorization.assets_names }}"
 
   tasks:
 
@@ -140,8 +140,8 @@
 
     - name: Afficher le resultat des permissions
       debug:
-        msg: "Resultat creation permission: {{ permission_result.results | map(attribute='json') | list }}"
-      when: permission_result is defined
+        msg: "Permissions creees avec succes"
+      when: permission_result is defined and 'results' in permission_result and permission_result['results'] | length > 0
 
     - name: Afficher le resultat de l'autorisation
       debug:
