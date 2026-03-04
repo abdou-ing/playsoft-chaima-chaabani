@@ -110,7 +110,9 @@
       set_fact:
         accounts_by_asset: "{{ accounts_by_asset | default({}) | combine({ item.item.id: (item.json | map(attribute='id') | list) }) }}"
       loop: "{{ accounts_result.results }}"
-      when: accounts_result is defined
+      when:
+        - accounts_result is defined
+        - accounts_result.results is defined
 
     - name: Creer les permissions pour chaque asset
       uri:
@@ -146,5 +148,4 @@
     - name: Afficher le resultat de l'autorisation
       debug:
         msg: >
-           Utilisateur '{{ target_username }}' autorise aux assets
-
+          Utilisateur '{{ target_username }}' autorise aux assets

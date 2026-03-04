@@ -1,37 +1,37 @@
 ---
 jumpserver_url: "http://ip"
-jumpserver_admin_user: "user-name"
+jumpserver_admin_user: "name"
 jumpserver_admin_password: "password"
 
 admin_user:
   name: "admin-user"
-  username: "aymen-tangara"
-  email: "aymen@example.com"
+  username: "name"
+  email: "email"
   password: "password"
 
 devops_user:
-  name: "devops-user"
+  name: "name"
   username: "chaima-chaabeni"
-  email: "chaima@example.com"
+  email: "email"
   password: "password"
 
 # Configuration serveur public
 public_server:
-  name: "name"
-  ip: "ip-public"
-  internal_ip: "ip-privat"
+  name: "public-server-chaima"
+  ip: "ip"
+  internal_ip: "ip"
   account_username: "name"
   ssh_private_key_path: "sshkey"
 
 # Configuration serveur privé
 private_server:
-  name: "private-server-chaima"
-  ip: "ip-privat"
+  name: "server-private-chaima"
+  ip: "ip"
   account_username: "name"
   ssh_private_key_path: "sshkey"
 
 # Configuration d'autorisation utilisateur
 user_authorization:
-  target_username: "chaima-chaabeni"
+  target_username: "name"
   assets_names:
-    - "private-server-chaima"
+    - "server-private-chaima"  
