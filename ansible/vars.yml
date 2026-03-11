@@ -1,37 +1,36 @@
----
-jumpserver_url: "http://ip"
-jumpserver_admin_user: "name"
-jumpserver_admin_password: "password"
 
+vault_url: "https://vault"
+vault_mount: "kv-dev"
+vault_token: "vault-token"
+
+# JumpServer — URL et password récupérés depuis Vault
+jumpserver_admin_user: "admin"
+
+# Utilisateur admin système — password récupéré depuis Vault
 admin_user:
   name: "admin-user"
-  username: "name"
-  email: "email"
-  password: "password"
+  username: "aymen-tangara"
+  email: "aymen@example.com"
 
+# Utilisateur DevOps — password récupéré depuis Vault
 devops_user:
-  name: "name"
+  name: "devops-user"
   username: "chaima-chaabeni"
-  email: "email"
-  password: "password"
+  email: "chaima@example.com"
 
-# Configuration serveur public
+# Serveur public — ip et ssh_key_path récupérés depuis Vault
 public_server:
   name: "public-server-chaima"
-  ip: "ip"
-  internal_ip: "ip"
-  account_username: "name"
-  ssh_private_key_path: "sshkey"
+  internal_ip: "10.40.0.2"
+  account_username: "root"
 
-# Configuration serveur privé
+# Serveur privé — ip et ssh_key_path récupérés depuis Vault
 private_server:
   name: "server-private-chaima"
-  ip: "ip"
-  account_username: "name"
-  ssh_private_key_path: "sshkey"
+  account_username: "root"
 
 # Configuration d'autorisation utilisateur
 user_authorization:
-  target_username: "name"
+  target_username: "chaima-chaabeni"
   assets_names:
-    - "server-private-chaima"  
+    - "server-private-chaima"

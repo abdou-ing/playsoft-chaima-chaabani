@@ -9,6 +9,10 @@
   vars:
     server_asset: "{{ private_server }}"
 
+  pre_tasks:
+    - name: Récupérer les secrets depuis Vault
+      include_tasks: vault_secrets.yml
+
   tasks:
 
     - name: Se connecter à JumpServer et obtenir le token et cookie
