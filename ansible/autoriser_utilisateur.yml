@@ -11,6 +11,10 @@
     target_username: "{{ user_authorization.target_username }}"
     assets_names: "{{ user_authorization.assets_names }}"
 
+  pre_tasks:
+    - name: Récupérer les secrets depuis Vault
+      include_tasks: vault_secrets.yml
+
   tasks:
 
     - name: Se connecter a JumpServer et obtenir le token
