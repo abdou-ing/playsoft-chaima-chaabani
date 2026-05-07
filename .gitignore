@@ -8,3 +8,10 @@ terraform.tfstate.1768826662.backup
 terraform.tfstate.1768826663.backup
 terraform.tfstate.backup
 
+# Local sensitive Terraform variables (tokens, snapshot IDs)
+**/local.auto.tfvars
+**/secrets.auto.tfvars
+**/env/dev.tfvars
+**/dev.tfvars
+
+

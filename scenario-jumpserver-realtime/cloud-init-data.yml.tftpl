@@ -1,0 +1,113 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - docker.io
+  - curl
+  - sshfs
+
+write_files:
+  - path: /usr/local/bin/setup-data-node.sh
+    owner: root:root
+    permissions: '0750'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      LOG=/var/log/data-node-setup.log
+      exec > >(tee -a "$${LOG}") 2>&1
+
+      systemctl enable --now docker
+
+      mkdir -p /data/postgresql /data/redis
+
+      # PostgreSQL dedicated container (runtime on local disk)
+      if ! docker ps -a --format '{{.Names}}' | grep -qx jms_ext_postgresql; then
+        docker run -d \
+          --name jms_ext_postgresql \
+          --restart unless-stopped \
+          -e POSTGRES_PASSWORD='${db_password}' \
+          -e POSTGRES_DB='${db_name}' \
+          -v /data/postgresql:/var/lib/postgresql/data \
+          -p 5432:5432 \
+          postgres:15
+      fi
+
+      # Redis dedicated container
+      if ! docker ps -a --format '{{.Names}}' | grep -qx jms_ext_redis; then
+        docker run -d \
+          --name jms_ext_redis \
+          --restart unless-stopped \
+          -v /data/redis:/data \
+          -p 6379:6379 \
+          redis:7 redis-server --appendonly yes --requirepass '${redis_password}'
+      fi
+
+      # Wait PostgreSQL readiness
+      for _ in $(seq 1 60); do
+        if docker exec jms_ext_postgresql pg_isready -U postgres >/dev/null 2>&1; then
+          break
+        fi
+        sleep 2
+      done
+
+      # Ensure DB exists
+      docker exec -u postgres jms_ext_postgresql psql -U postgres -d postgres \
+        -c "SELECT 1 FROM pg_database WHERE datname='${db_name}'" | grep -q 1 || \
+      docker exec -u postgres jms_ext_postgresql psql -U postgres -d postgres \
+        -c "CREATE DATABASE \"${db_name}\" OWNER \"${db_user}\";"
+
+      # Ensure postgres role password matches expected value
+      docker exec -u postgres jms_ext_postgresql psql -U postgres -d postgres \
+        -c "ALTER USER \"${db_user}\" WITH PASSWORD '${db_password}';"
+
+      # Restrict PostgreSQL access to private network
+      docker exec jms_ext_postgresql bash -lc "grep -q \"^host all all ${allowed_net} md5\" /var/lib/postgresql/data/pg_hba.conf || echo 'host all all ${allowed_net} md5' >> /var/lib/postgresql/data/pg_hba.conf"
+      docker exec jms_ext_postgresql bash -lc "grep -q \"^listen_addresses\" /var/lib/postgresql/data/postgresql.conf && sed -i \"s/^listen_addresses.*/listen_addresses='*'/\" /var/lib/postgresql/data/postgresql.conf || echo \"listen_addresses='*'\" >> /var/lib/postgresql/data/postgresql.conf"
+      docker restart jms_ext_postgresql
+
+  - path: /root/.storagebox_pass
+    owner: root:root
+    permissions: '0600'
+    content: |
+      ${storagebox_password}
+
+  - path: /usr/local/bin/mount-storagebox.sh
+    owner: root:root
+    permissions: '0750'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      mkdir -p /data/storagebox
+      if mountpoint -q /data/storagebox; then
+        exit 0
+      fi
+      if grep -q '^#user_allow_other' /etc/fuse.conf; then
+        sed -i 's/^#user_allow_other/user_allow_other/' /etc/fuse.conf
+      fi
+      for attempt in 1 2 3 4 5; do
+        if sshfs \
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          -o reconnect \
+          -o ServerAliveInterval=15 \
+          -o ServerAliveCountMax=3 \
+          -o idmap=user \
+          -o uid=0 \
+          -o gid=0 \
+          -o umask=022 \
+          -o default_permissions \
+          -o allow_other \
+          -o password_stdin \
+          ${storagebox_user}@${storagebox_host}:${storagebox_remote_path} \
+          /data/storagebox < /root/.storagebox_pass; then
+          exit 0
+        fi
+        sleep 5
+      done
+      echo "Storage Box mount failed after 5 attempts" >&2
+      exit 1
+
+runcmd:
+  - /usr/local/bin/setup-data-node.sh
+  - bash /usr/local/bin/mount-storagebox.sh

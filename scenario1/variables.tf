@@ -23,7 +23,7 @@ variable "server_type" {
 variable "server_location" {
   description = "Emplacement du serveur Hetzner"
   type        = string
-  default     = "hel1"
+  default     = "fsn1"
 }
 
 # Image du serveur
@@ -37,7 +37,7 @@ variable "server_image" {
 variable "ssh_key_name" {
   description = "Nom de la clé SSH déjà ajoutée dans Hetzner Cloud"
   type        = string
-  default     = "chaima_key"
+  default     = "chaima_pubkey"
 }
 
 # Réseau privé existant
@@ -52,4 +52,16 @@ variable "private_ip" {
   description = "IP privée du serveur dans le réseau privé"
   type        = string
   default     = "10.40.0.3"
+}
+
+variable "enable_ansible_post_apply" {
+  description = "Active l'execution automatique des playbooks Ansible apres terraform apply"
+  type        = bool
+  default     = true
+}
+
+variable "ansible_wait_seconds" {
+  description = "Temps d'attente (secondes) avant de lancer Ansible pour laisser JumpServer demarrer"
+  type        = number
+  default     = 120
 }

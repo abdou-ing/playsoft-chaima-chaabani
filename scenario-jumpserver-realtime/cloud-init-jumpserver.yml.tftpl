@@ -1,0 +1,112 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - docker.io
+  - curl
+  - git
+  - python3-pip
+  - sshfs
+
+write_files:
+  - path: /usr/local/bin/setup-jumpserver.sh
+    owner: root:root
+    permissions: '0750'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      LOG=/var/log/jumpserver-setup.log
+      exec > >(tee -a "$${LOG}") 2>&1
+
+      systemctl enable --now docker
+
+      mkdir -p /data/jumpserver
+      for p in \
+        /data/jumpserver/core \
+        /data/jumpserver/redis \
+        /data/jumpserver/postgresql \
+        /data/jumpserver/web \
+        /data/jumpserver/koko \
+        /data/jumpserver/lion \
+        /data/jumpserver/chen \
+        /data/jumpserver/celery; do
+        mkdir -p "$${p}"
+      done
+
+      if [[ ! -x /tmp/jumpserver.sh ]]; then
+        curl -sSL https://github.com/jumpserver/jumpserver/releases/latest/download/quick_start.sh \
+          -o /tmp/jumpserver.sh
+        chmod +x /tmp/jumpserver.sh
+      fi
+
+      # Install once; if already installed this should be no-op by guard file.
+      if [[ ! -f /opt/jumpserver/.external-db-configured ]]; then
+        bash /tmp/jumpserver.sh
+      fi
+
+      set_kv_in_file() {
+        local file="$1"
+        local k="$2"
+        local v="$3"
+        [[ -f "$${file}" ]] || return 0
+        if grep -q "^$${k}=" "$${file}"; then
+          sed -i "s|^$${k}=.*|$${k}=$${v}|" "$${file}"
+        else
+          echo "$${k}=$${v}" >> "$${file}"
+        fi
+      }
+
+      # Patch all common installer/runtime config files so the resulting
+      # container environment cannot keep default local values.
+      for cfg in \
+        /opt/jumpserver/config/config.txt \
+        /opt/jumpserver/config/.env \
+        /opt/jumpserver-installer/config/config.txt \
+        /opt/jumpserver-installer/config/.env \
+        /opt/jumpserver-installer-v4.8.0/config/config.txt \
+        /opt/jumpserver-installer-v4.8.0/config/.env; do
+        set_kv_in_file "$${cfg}" DB_HOST "${db_host}"
+        set_kv_in_file "$${cfg}" DB_PORT "${db_port}"
+        set_kv_in_file "$${cfg}" DB_NAME "${db_name}"
+        set_kv_in_file "$${cfg}" DB_USER "${db_user}"
+        set_kv_in_file "$${cfg}" DB_PASSWORD "${db_password}"
+        set_kv_in_file "$${cfg}" REDIS_HOST "${redis_host}"
+        set_kv_in_file "$${cfg}" REDIS_PORT "${redis_port}"
+        set_kv_in_file "$${cfg}" REDIS_PASSWORD "${redis_password}"
+      done
+
+      touch /opt/jumpserver/.external-db-configured
+
+      if [[ -x /opt/jumpserver-installer-v4.8.0/jmsctl.sh ]]; then
+        /opt/jumpserver-installer-v4.8.0/jmsctl.sh down || true
+        /opt/jumpserver-installer-v4.8.0/jmsctl.sh up -d
+      elif [[ -x /opt/jumpserver-installer/jmsctl.sh ]]; then
+        /opt/jumpserver-installer/jmsctl.sh down || true
+        /opt/jumpserver-installer/jmsctl.sh up -d
+      fi
+
+  - path: /etc/systemd/system/jumpserver-setup.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Setup JumpServer with external PostgreSQL/Redis
+      After=docker.service network-online.target
+      Wants=network-online.target
+      Requires=docker.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/bin/setup-jumpserver.sh
+      StandardOutput=journal
+      StandardError=journal
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - systemctl daemon-reload
+  - systemctl enable --now jumpserver-setup.service
+  - echo "${node_name}" > /etc/jumpserver-node-name
