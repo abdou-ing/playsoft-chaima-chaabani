@@ -1,0 +1,22 @@
+hcloud_token = ""
+
+network_name  = "nw-chaima"
+ssh_key_name  = "chaima_pubkey"
+location      = "hel1"
+
+jump_image       = "ubuntu-24.04"
+jump_server_type = "cx23"
+data_image       = "ubuntu-24.04"
+data_server_type = "cx23"
+
+jump_node_count        = 2
+lb_target_node_indexes = [0,1]
+
+jump_private_ips = ["10.40.0.41", "10.40.0.42"]
+lb_private_ip    = "10.40.0.44"
+data_private_ip  = "10.40.0.43"
+
+postgres_db       = "jumpserver"
+postgres_user     = "postgres"
+postgres_password = "CHANGE_ME_DB_PASSWORD"
+redis_password    = "CHANGE_ME_REDIS_PASSWORD"

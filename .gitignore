@@ -1,3 +1,4 @@
+# Fichiers locaux et environnement
 .env
 .vscode/
 .vscode-server/
@@ -8,4 +9,19 @@ GUIDE_TEST_SCRIPT.md
 requirements.txt
 setup-env.sh.vscode-server/
 snap/
+
+# Terraform local state and working directory
 .terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+terraform.tfstate
+terraform.tfstate.1768826662.backup
+terraform.tfstate.1768826663.backup
+terraform.tfstate.backup
+
+# Local sensitive Terraform variables (tokens, snapshot IDs)
+**/local.auto.tfvars
+**/secrets.auto.tfvars
+**/env/dev.tfvars
+**/dev.tfvars
