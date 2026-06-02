@@ -1,0 +1,29 @@
+aws_region          = "eu-central-1"
+aws_key_name        = "your-ec2-keypair"
+project_name        = "jump-realtime"
+admin_cidr          = "0.0.0.0/0"
+
+postgres_db         = "jumpserver"
+postgres_user       = "postgres"
+postgres_password   = "CHANGE_ME_DB_PASSWORD"
+redis_password      = "CHANGE_ME_DB_PASSWORD"
+# Instance sizes
+# Data node (PostgreSQL + Redis): 40GB by default
+# Jump app nodes: 50GB by default (increase if cloud-init fails due to disk space)
+data_volume_size_gb = 40
+jump_volume_size_gb = 50
+storagebox_user        = "u578650"
+storagebox_password    = "CHANGE_ME_DB_PASSWORD"
+storagebox_host        = "u578650.your-storagebox.de"
+storagebox_remote_path = "/backup/"
+
+# IAM and S3 backup (optional)
+create_iam_role          = true
+attach_ssm_policy        = true
+attach_cloudwatch_policy = false
+
+enable_s3_backup        = false
+create_s3_backup_bucket = false
+s3_backup_bucket_name   = ""
+s3_backup_prefix        = "jumpserver/"
+s3_backup_cron          = "0 * * * *"
