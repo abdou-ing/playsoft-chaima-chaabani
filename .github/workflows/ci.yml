@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: Terraform validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive terraform
+
+      - name: Validate Terraform stacks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t stacks < <(find terraform -name main.tf -not -path '*/.terraform/*' -exec dirname {} \; | sort -u)
+
+          for stack in "${stacks[@]}"; do
+            echo "Validating ${stack}"
+            terraform -chdir="${stack}" init -backend=false -input=false -no-color
+            terraform -chdir="${stack}" validate -no-color
+          done
+
+  ansible:
+    name: Ansible and YAML validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linters
+        run: python -m pip install --upgrade pip ansible-lint yamllint
+
+      - name: YAML lint
+        run: yamllint -d relaxed ansible terraform/ansible
+
+      - name: Ansible lint
+        run: ansible-lint ansible/*.yml terraform/ansible/*.yml
+
+  security:
+    name: Security and compliance scans
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Secret scan with Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --no-banner --redact --source . --no-git
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Checkov
+        run: python -m pip install --upgrade pip checkov
+
+      - name: Checkov scan on Terraform stacks
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t stacks < <(find terraform -name main.tf -not -path '*/.terraform/*' -exec dirname {} \; | sort -u)
+
+          for stack in "${stacks[@]}"; do
+            echo "Scanning ${stack}"
+            checkov -d "${stack}" --quiet
+          done

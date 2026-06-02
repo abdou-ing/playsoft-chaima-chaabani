@@ -1,0 +1,68 @@
+name: Deploy Terraform
+
+on:
+  workflow_dispatch:
+    inputs:
+      stack_path:
+        description: Terraform stack to deploy
+        required: true
+        default: terraform/jumpserver-ha
+      action:
+        description: Run a plan or apply
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+        default: plan
+      environment:
+        description: GitHub environment name
+        required: true
+        default: production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Terraform deploy
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+      HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Validate stack path
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "${{ inputs.stack_path }}"
+
+      - name: Terraform init
+        run: terraform -chdir="${{ inputs.stack_path }}" init -input=false -no-color
+
+      - name: Terraform plan
+        run: terraform -chdir="${{ inputs.stack_path }}" plan -input=false -no-color -out=tfplan
+
+      - name: Terraform apply
+        if: ${{ inputs.action == 'apply' }}
+        run: terraform -chdir="${{ inputs.stack_path }}" apply -auto-approve -no-color tfplan
