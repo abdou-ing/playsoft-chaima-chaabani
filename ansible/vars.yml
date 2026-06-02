@@ -1,7 +1,7 @@
 
-vault_url: "https://vault"
+vault_url: "https://vault.dev.playsoft.io:8200/"
 vault_mount: "kv-dev"
-vault_token: "vault-token"
+vault_token: "{{ lookup('env', 'VAULT_TOKEN') }}"
 
 # JumpServer — URL et password récupérés depuis Vault
 jumpserver_admin_user: "admin"

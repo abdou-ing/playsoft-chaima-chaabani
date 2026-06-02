@@ -24,4 +24,4 @@ terraform.tfstate.backup
 **/local.auto.tfvars
 **/secrets.auto.tfvars
 **/env/dev.tfvars
-**/dev.tfvars
+**/dev.tfvarsansible/vars.yml
