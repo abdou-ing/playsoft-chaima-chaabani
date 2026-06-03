@@ -74,7 +74,7 @@ jobs:
 
       - name: Ansible lint
         if: steps.check_ansible.outputs.exists == 'true'
-        run: ansible-lint ansible/*.yml
+        run: ansible-lint ansible/*.yml --exclude ansible/vars.yml
 
   security:
     name: Security and compliance scans

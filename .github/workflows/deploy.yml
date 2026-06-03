@@ -66,3 +66,31 @@ jobs:
       - name: Terraform apply
         if: ${{ inputs.action == 'apply' }}
         run: terraform -chdir="${{ inputs.stack_path }}" apply -auto-approve -no-color tfplan
+
+      - name: Setup Python for Ansible
+        if: ${{ inputs.action == 'apply' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        if: ${{ inputs.action == 'apply' }}
+        run: python -m pip install --upgrade pip ansible
+
+      - name: Check if ansible folder exists
+        if: ${{ inputs.action == 'apply' }}
+        id: check_ansible
+        run: |
+          if [ -d "ansible" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Dossier ansible trouvé"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Dossier ansible absent — bootstrap ignoré"
+          fi
+
+      - name: Run Ansible bootstrap
+        if: ${{ inputs.action == 'apply' && steps.check_ansible.outputs.exists == 'true' }}
+        run: |
+          ansible-playbook -i ansible/inventory.ini \
+            ansible/bootstrap_jumpserver.yml
