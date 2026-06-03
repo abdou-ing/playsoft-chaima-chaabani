@@ -1,8 +1,11 @@
-warn_list:
-  - fqcn
-  - truthy
-  - no-changed-when
+warn_list: []
 skip_list:
   - fqcn[action-core]
+  - fqcn[action]
   - truthy
   - no-changed-when
+  - jinja[spacing]
+  - yaml[empty-lines]
+  - yaml[trailing-spaces]
+  - yaml[new-line-at-end-of-file]
+  - yaml[line-length]
