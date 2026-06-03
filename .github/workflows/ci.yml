@@ -83,6 +83,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Secret scan with Gitleaks
         shell: bash
@@ -95,7 +97,7 @@ jobs:
           curl -sSL "${url}" -o "${archive}"
           tar -xzf "${archive}"
           chmod +x gitleaks
-          ./gitleaks detect --no-banner --redact --source . --no-git
+          ./gitleaks detect --no-banner --redact --source .
 
       - name: Setup Python
         uses: actions/setup-python@v5
