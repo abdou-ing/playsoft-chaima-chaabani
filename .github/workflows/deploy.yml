@@ -6,7 +6,7 @@ on:
       stack_path:
         description: Terraform stack to deploy
         required: true
-        default: terraform/jumpserver-ha
+        default: terraform/scenario-jumpserver-realtime
       action:
         description: Run a plan or apply
         required: true
